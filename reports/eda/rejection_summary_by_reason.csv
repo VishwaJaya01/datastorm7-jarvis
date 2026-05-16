@@ -1,0 +1,7 @@
+dataset,check_name,failure_reason,rejected_events
+holiday_list,holiday_exact_duplicate,"Duplicate record for key: Date, Holiday_Name, Holiday_Type",93
+outlet_coordinates,latitude_sri_lanka_bbox,"Latitude is non-numeric or outside expected range [5.0, 10.0]",40
+outlet_coordinates,longitude_sri_lanka_bbox,"Longitude is non-numeric or outside expected range [79.0, 82.0]",40
+transactions_history_final,transaction_composite_key_duplicate,"Duplicate record for key: Outlet_ID, Year, Month, Distributor_ID, SKU_ID",32240
+transactions_history_final,volume_positive,"Volume_Liters is non-numeric or outside expected range (0, inf)",4853
+transactions_history_final,bill_value_positive,"Total_Bill_Value is non-numeric or outside expected range (0, inf)",4753
