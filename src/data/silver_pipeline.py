@@ -117,6 +117,9 @@ def run_pipeline(paths: PipelinePaths | None = None) -> dict[str, dict[str, int]
     _write_dataset_outputs(paths, "transactions_history_final", transactions_silver, transactions_rejected)
 
     validate_silver_outputs(paths)
+    write_handoff_outputs(paths)
+    validate_handoff_outputs(paths)
+    write_report_ready_summaries(paths)
     metrics = build_pipeline_metrics(paths)
     write_schema_contract(paths)
     write_forensics_report(paths, metrics)
@@ -405,6 +408,252 @@ def validate_silver_outputs(paths: PipelinePaths | None = None) -> None:
     assert not holidays.duplicated(["Date", "Holiday_Name", "Holiday_Type"]).any(), "Exact duplicate holidays remain"
 
 
+def write_handoff_outputs(paths: PipelinePaths | None = None) -> None:
+    """Write downstream-ready Silver handoff files for POI and modeling work."""
+
+    paths = paths or PipelinePaths()
+    outlet_master = pd.read_csv(paths.silver / "outlet_master.csv")
+    coordinates = pd.read_csv(paths.silver / "outlet_coordinates.csv")
+    transactions = pd.read_csv(paths.silver / "transactions_history_final.csv")
+
+    monthly = build_monthly_outlet_volume(transactions)
+    locations = build_clean_outlet_locations(outlet_master, coordinates)
+    base_features = build_outlet_base_features(outlet_master, monthly)
+
+    monthly.to_csv(paths.silver / "monthly_outlet_volume.csv", index=False)
+    locations.to_csv(paths.silver / "clean_outlet_locations.csv", index=False)
+    base_features.to_csv(paths.silver / "outlet_base_features.csv", index=False)
+
+
+def validate_handoff_outputs(paths: PipelinePaths | None = None) -> None:
+    """Fail fast if downstream handoff files are incomplete."""
+
+    paths = paths or PipelinePaths()
+    monthly = pd.read_csv(paths.silver / "monthly_outlet_volume.csv")
+    locations = pd.read_csv(paths.silver / "clean_outlet_locations.csv")
+    base = pd.read_csv(paths.silver / "outlet_base_features.csv")
+    outlet_master = pd.read_csv(paths.silver / "outlet_master.csv")
+    coordinates = pd.read_csv(paths.silver / "outlet_coordinates.csv")
+
+    assert not monthly.duplicated(["Outlet_ID", "Year", "Month"]).any(), "Monthly handoff must be outlet-month unique"
+    assert (monthly["monthly_volume_liters"] > 0).all(), "Monthly handoff contains non-positive volume"
+    assert set(locations["Outlet_ID"]) == set(coordinates["Outlet_ID"]), "Location handoff must match usable coordinates"
+    assert set(locations["coord_status"]).issubset({"valid", "corrected"}), "Location handoff includes unusable coordinates"
+    assert set(base["Outlet_ID"]) == set(outlet_master["Outlet_ID"]), "Base features must cover every Silver outlet"
+
+    required_flags = {
+        "missing_months_flag",
+        "low_activity_outlet_flag",
+        "sudden_drop_flag",
+        "volume_spike_flag",
+        "high_variability_flag",
+        "coord_quality_flag",
+    }
+    assert required_flags.issubset(base.columns), "Base features missing soft modeling flags"
+
+
+def build_monthly_outlet_volume(transactions: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate clean transactions to one outlet-month row."""
+
+    monthly = (
+        transactions.groupby(["Outlet_ID", "Year", "Month"], as_index=False)
+        .agg(
+            monthly_volume_liters=("Volume_Liters", "sum"),
+            monthly_bill_value=("Total_Bill_Value", "sum"),
+            transaction_rows=("SKU_ID", "size"),
+            active_sku_count=("SKU_ID", "nunique"),
+            active_distributor_count=("Distributor_ID", "nunique"),
+        )
+        .sort_values(["Outlet_ID", "Year", "Month"])
+    )
+    monthly["avg_bill_value_per_liter"] = monthly["monthly_bill_value"] / monthly["monthly_volume_liters"]
+    return monthly
+
+
+def build_clean_outlet_locations(outlet_master: pd.DataFrame, coordinates: pd.DataFrame) -> pd.DataFrame:
+    """Build the POI handoff table containing only outlets with usable coordinates."""
+
+    location_columns = ["Outlet_ID", "Outlet_Size", "Cooler_Count", "Outlet_Type", "outlet_size_status"]
+    locations = coordinates.merge(outlet_master[location_columns], on="Outlet_ID", how="left")
+    locations["has_valid_coord"] = True
+    return locations[
+        [
+            "Outlet_ID",
+            "Latitude",
+            "Longitude",
+            "coord_status",
+            "has_valid_coord",
+            "Outlet_Size",
+            "Cooler_Count",
+            "Outlet_Type",
+            "outlet_size_status",
+        ]
+    ].sort_values("Outlet_ID")
+
+
+def build_outlet_base_features(outlet_master: pd.DataFrame, monthly: pd.DataFrame) -> pd.DataFrame:
+    """Create outlet-level base features and soft modeling flags."""
+
+    observed_months = monthly[["Year", "Month"]].drop_duplicates()
+    expected_month_count = len(observed_months)
+
+    outlet_monthly = monthly.copy()
+    outlet_monthly["month_index"] = outlet_monthly["Year"] * 12 + outlet_monthly["Month"]
+    max_month_index = outlet_monthly["month_index"].max()
+
+    grouped = outlet_monthly.groupby("Outlet_ID")
+    features = grouped.agg(
+        active_month_count=("month_index", "nunique"),
+        total_volume_liters=("monthly_volume_liters", "sum"),
+        avg_monthly_volume_liters=("monthly_volume_liters", "mean"),
+        median_monthly_volume_liters=("monthly_volume_liters", "median"),
+        max_monthly_volume_liters=("monthly_volume_liters", "max"),
+        std_monthly_volume_liters=("monthly_volume_liters", "std"),
+        total_bill_value=("monthly_bill_value", "sum"),
+        avg_bill_value_per_liter=("avg_bill_value_per_liter", "mean"),
+        active_sku_count=("active_sku_count", "max"),
+        active_distributor_count=("active_distributor_count", "max"),
+        first_active_period=("month_index", "min"),
+        last_active_period=("month_index", "max"),
+    ).reset_index()
+    features["first_active_year"] = ((features["first_active_period"] - 1) // 12).astype("int64")
+    features["first_active_month"] = ((features["first_active_period"] - 1) % 12 + 1).astype("int64")
+    features["last_active_year"] = ((features["last_active_period"] - 1) // 12).astype("int64")
+    features["last_active_month"] = ((features["last_active_period"] - 1) % 12 + 1).astype("int64")
+    features = features.drop(columns=["first_active_period", "last_active_period"])
+    features["std_monthly_volume_liters"] = features["std_monthly_volume_liters"].fillna(0)
+    features["monthly_volume_cv"] = (
+        features["std_monthly_volume_liters"] / features["avg_monthly_volume_liters"].replace(0, pd.NA)
+    ).fillna(0)
+
+    low_activity_cutoff = features["active_month_count"].quantile(0.10) if not features.empty else 0
+    variability_cutoff = features["monthly_volume_cv"].quantile(0.90) if not features.empty else 0
+
+    recent_window = outlet_monthly.loc[outlet_monthly["month_index"] > max_month_index - 3]
+    prior_window = outlet_monthly.loc[
+        (outlet_monthly["month_index"] <= max_month_index - 3)
+        & (outlet_monthly["month_index"] > max_month_index - 6)
+    ]
+    recent_avg = recent_window.groupby("Outlet_ID")["monthly_volume_liters"].mean()
+    prior_avg = prior_window.groupby("Outlet_ID")["monthly_volume_liters"].mean()
+
+    volume_spike_flag = grouped["monthly_volume_liters"].apply(_has_volume_spike).rename("volume_spike_flag")
+
+    features = features.merge(volume_spike_flag.reset_index(), on="Outlet_ID", how="left")
+    features["missing_months_flag"] = features["active_month_count"] < expected_month_count
+    features["low_activity_outlet_flag"] = features["active_month_count"] <= low_activity_cutoff
+    features["sudden_drop_flag"] = features["Outlet_ID"].map(
+        lambda outlet_id: _has_sudden_drop(outlet_id, recent_avg, prior_avg)
+    )
+    features["high_variability_flag"] = features["monthly_volume_cv"] >= variability_cutoff
+    features["volume_spike_flag"] = features["volume_spike_flag"].fillna(False)
+
+    base = outlet_master.merge(features, on="Outlet_ID", how="left")
+    numeric_defaults = {
+        "active_month_count": 0,
+        "total_volume_liters": 0,
+        "avg_monthly_volume_liters": 0,
+        "median_monthly_volume_liters": 0,
+        "max_monthly_volume_liters": 0,
+        "std_monthly_volume_liters": 0,
+        "monthly_volume_cv": 0,
+        "total_bill_value": 0,
+        "avg_bill_value_per_liter": 0,
+        "active_sku_count": 0,
+        "active_distributor_count": 0,
+    }
+    for column, default in numeric_defaults.items():
+        base[column] = base[column].fillna(default)
+
+    for column in ["first_active_year", "last_active_year", "first_active_month", "last_active_month"]:
+        base[column] = base[column].astype("Int64")
+
+    base["missing_months_flag"] = base["missing_months_flag"].fillna(True)
+    base["low_activity_outlet_flag"] = base["low_activity_outlet_flag"].fillna(True)
+    base["sudden_drop_flag"] = base["sudden_drop_flag"].fillna(False)
+    base["volume_spike_flag"] = base["volume_spike_flag"].fillna(False)
+    base["high_variability_flag"] = base["high_variability_flag"].fillna(False)
+    base["coord_quality_flag"] = ~base["coord_status"].eq("valid")
+
+    flag_columns = [
+        "missing_months_flag",
+        "low_activity_outlet_flag",
+        "sudden_drop_flag",
+        "volume_spike_flag",
+        "high_variability_flag",
+        "coord_quality_flag",
+    ]
+    base[flag_columns] = base[flag_columns].astype(bool)
+    return base.sort_values("Outlet_ID")
+
+
+def write_report_ready_summaries(paths: PipelinePaths | None = None) -> None:
+    """Write compact CSV summaries for report tables and audit appendices."""
+
+    paths = paths or PipelinePaths()
+    rejected_frames = []
+    warning_frames = []
+    for path in sorted(paths.rejected.glob("*_rejected.csv")):
+        frame = pd.read_csv(path)
+        if not frame.empty:
+            frame["dataset"] = path.name.removesuffix("_rejected.csv")
+            rejected_frames.append(frame)
+    for path in sorted(paths.rejected.glob("*_warnings.csv")):
+        frame = pd.read_csv(path)
+        if not frame.empty:
+            frame["dataset"] = path.name.removesuffix("_warnings.csv")
+            warning_frames.append(frame)
+
+    rejected = pd.concat(rejected_frames, ignore_index=True) if rejected_frames else pd.DataFrame()
+    warnings = pd.concat(warning_frames, ignore_index=True) if warning_frames else pd.DataFrame()
+
+    if rejected.empty:
+        rejection_by_dataset = pd.DataFrame(columns=["dataset", "rejected_events", "unique_rejected_rows"])
+        rejection_by_reason = pd.DataFrame(columns=["dataset", "check_name", "failure_reason", "rejected_events"])
+    else:
+        rejected_events = rejected.groupby("dataset", as_index=False).size().rename(columns={"size": "rejected_events"})
+        unique_rejected_rows = pd.DataFrame(
+            [
+                {"dataset": dataset, "unique_rejected_rows": _unique_audit_rows(group)}
+                for dataset, group in rejected.groupby("dataset")
+            ]
+        )
+        rejection_by_dataset = rejected_events.merge(unique_rejected_rows, on="dataset", how="left")
+        rejection_by_reason = (
+            rejected.groupby(["dataset", "check_name", "failure_reason"], as_index=False)
+            .size()
+            .rename(columns={"size": "rejected_events"})
+            .sort_values(["dataset", "rejected_events"], ascending=[True, False])
+        )
+
+    if warnings.empty:
+        warning_summary = pd.DataFrame(columns=["dataset", "check_name", "failure_reason", "warning_events"])
+    else:
+        warning_summary = (
+            warnings.groupby(["dataset", "check_name", "failure_reason", "action_taken"], as_index=False)
+            .size()
+            .rename(columns={"size": "warning_events"})
+            .sort_values(["dataset", "warning_events"], ascending=[True, False])
+        )
+
+    corrections_path = paths.silver / "outlet_coordinates_corrections.csv"
+    corrections = pd.read_csv(corrections_path) if corrections_path.exists() else pd.DataFrame()
+    if corrections.empty:
+        correction_summary = pd.DataFrame(columns=["dataset", "correction_reason", "corrected_rows"])
+    else:
+        correction_summary = (
+            corrections.groupby("correction_reason", as_index=False)
+            .size()
+            .rename(columns={"size": "corrected_rows"})
+        )
+        correction_summary.insert(0, "dataset", "outlet_coordinates")
+
+    rejection_by_dataset.to_csv(paths.reports_eda / "rejection_summary_by_dataset.csv", index=False)
+    rejection_by_reason.to_csv(paths.reports_eda / "rejection_summary_by_reason.csv", index=False)
+    warning_summary.to_csv(paths.reports_eda / "warning_summary.csv", index=False)
+    correction_summary.to_csv(paths.reports_eda / "correction_summary.csv", index=False)
+
+
 def write_schema_contract(paths: PipelinePaths | None = None) -> None:
     """Write the Silver schema handoff contract for Members 2 and 3."""
 
@@ -417,6 +666,9 @@ def write_schema_contract(paths: PipelinePaths | None = None) -> None:
             paths.silver / "transactions_history_final.csv",
             paths.silver / "distributor_seasonality_details.csv",
             paths.silver / "holiday_list.csv",
+            paths.silver / "monthly_outlet_volume.csv",
+            paths.silver / "clean_outlet_locations.csv",
+            paths.silver / "outlet_base_features.csv",
         ]
         if path.exists()
     }
@@ -435,6 +687,9 @@ def write_schema_contract(paths: PipelinePaths | None = None) -> None:
         f"| transactions_history_final.csv | {silver_counts.get('transactions_history_final.csv', 0)} | Clean transaction history with positive volume/value and valid FKs. |",
         f"| distributor_seasonality_details.csv | {silver_counts.get('distributor_seasonality_details.csv', 0)} | One row per distributor/year/month. |",
         f"| holiday_list.csv | {silver_counts.get('holiday_list.csv', 0)} | Exact duplicate holidays removed; distinct same-date holidays preserved. |",
+        f"| monthly_outlet_volume.csv | {silver_counts.get('monthly_outlet_volume.csv', 0)} | One clean outlet/year/month row with volume, value, and activity counts. |",
+        f"| clean_outlet_locations.csv | {silver_counts.get('clean_outlet_locations.csv', 0)} | POI handoff containing only usable outlet coordinates plus outlet descriptors. |",
+        f"| outlet_base_features.csv | {silver_counts.get('outlet_base_features.csv', 0)} | Modeling handoff with outlet-level aggregates and soft DQ/activity flags. |",
         "",
         "## File Schemas",
         "",
@@ -445,6 +700,9 @@ def write_schema_contract(paths: PipelinePaths | None = None) -> None:
         "| transactions_history_final.csv | `Outlet_ID`, `Year`, `Month`, `Distributor_ID`, `SKU_ID`, `Volume_Liters`, `Total_Bill_Value` | Year 2023-2025, month 1-12, positive volume and bill value. |",
         "| distributor_seasonality_details.csv | `Distributor_ID`, `Year`, `Month`, `Seasonality_Index` | `Seasonality_Index`: Moderate/Favorable/Un-Favorable after normalization. |",
         "| holiday_list.csv | `Date`, `Holiday_Name`, `Holiday_Type` | `Date` is ISO `YYYY-MM-DD`; exact duplicates removed. |",
+        "| monthly_outlet_volume.csv | `Outlet_ID`, `Year`, `Month`, `monthly_volume_liters`, `monthly_bill_value`, `transaction_rows`, `active_sku_count`, `active_distributor_count`, `avg_bill_value_per_liter` | Aggregated from clean Silver transactions only. |",
+        "| clean_outlet_locations.csv | `Outlet_ID`, `Latitude`, `Longitude`, `coord_status`, `has_valid_coord`, `Outlet_Size`, `Cooler_Count`, `Outlet_Type`, `outlet_size_status` | Intended for POI joins; excludes `quarantined` and `missing` coordinates. |",
+        "| outlet_base_features.csv | outlet descriptors, monthly volume aggregates, and flags | Flags: `missing_months_flag`, `low_activity_outlet_flag`, `sudden_drop_flag`, `volume_spike_flag`, `high_variability_flag`, `coord_quality_flag`. |",
         "",
         "## Referential Integrity",
         "",
@@ -486,6 +744,8 @@ def write_forensics_report(paths: PipelinePaths, metrics: dict[str, dict[str, in
             "- `transactions_history_final.csv`: rejected non-positive sales values, invalid dates, orphan outlet/distributor IDs, and duplicate outlet-month-distributor-SKU keys after the first occurrence.",
             "- `distributor_seasonality_details.csv`: normalized seasonality casing/hyphenation before validating canonical labels (`Moderate`, `Favorable`, `Un-Favorable`).",
             "- `holiday_list.csv`: parsed holiday dates and removed exact duplicate holiday records while preserving multiple different holidays on the same date.",
+            "- Handoff files: created `monthly_outlet_volume.csv`, `clean_outlet_locations.csv`, and `outlet_base_features.csv` so POI and modeling work can start from stable Silver contracts.",
+            "- Modeling flags: surfaced missing history, low activity, sudden recent drops, volume spikes, high variability, and coordinate quality as soft flags rather than hard filters.",
             "",
             "## Silver Coordinate Contract",
             "",
@@ -580,6 +840,25 @@ def _canonicalize_seasonality(series: pd.Series) -> pd.Series:
     keys = stripped.map(normalize_key)
     canonical = keys.map(SEASONALITY_CANONICAL)
     return canonical.astype("string").fillna(stripped)
+
+
+def _has_volume_spike(values: pd.Series) -> bool:
+    if len(values) < 4:
+        return False
+    q1 = values.quantile(0.25)
+    q3 = values.quantile(0.75)
+    iqr = q3 - q1
+    if iqr == 0:
+        return bool(values.max() > q3 * 2)
+    return bool(values.max() > q3 + 3 * iqr)
+
+
+def _has_sudden_drop(outlet_id: str, recent_avg: pd.Series, prior_avg: pd.Series) -> bool:
+    recent = recent_avg.get(outlet_id)
+    prior = prior_avg.get(outlet_id)
+    if pd.isna(recent) or pd.isna(prior) or prior <= 0:
+        return False
+    return bool(recent < prior * 0.5)
 
 
 def main() -> None:

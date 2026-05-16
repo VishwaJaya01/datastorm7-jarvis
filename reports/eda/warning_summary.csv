@@ -1,0 +1,2 @@
+dataset,check_name,failure_reason,action_taken,warning_events
+outlet_master,outlet_size_missing_warning,Outlet_Size missing; retained in Silver as Unknown for full outlet coverage,retained_with_unknown_outlet_size,196
