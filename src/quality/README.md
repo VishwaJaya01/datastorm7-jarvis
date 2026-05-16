@@ -2,4 +2,11 @@
 
 Data quality checks, anomaly detection rules, and validation reports for competition datasets.
 
-TODO: Add checks for missing values, duplicate records, invalid ranges, and referential integrity.
+Reusable checks live in `checks.py` and return standard `CheckResult` objects.
+Each check can be applied consistently across datasets and converted into the
+standard rejected-record shape with:
+
+- `source_file`
+- `check_name`
+- `failure_reason`
+- `rejected_at`
