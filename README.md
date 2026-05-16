@@ -49,6 +49,22 @@ Raw data
 -> Final submission CSV
 ```
 
+Run the Member 1 Bronze/Silver handoff pipeline from the repository root:
+
+```bash
+python3 -m src.data.silver_pipeline
+```
+
+The command expects the Kaggle CSV files in `data/raw/` and writes cleaned Silver tables, rejected-record audit files, and report summaries. Key handoff outputs are:
+
+- `data/silver/monthly_outlet_volume.csv`
+- `data/silver/clean_outlet_locations.csv`
+- `data/silver/outlet_base_features.csv`
+- `reports/eda/rejection_summary_by_dataset.csv`
+- `reports/eda/rejection_summary_by_reason.csv`
+- `reports/eda/warning_summary.csv`
+- `reports/eda/correction_summary.csv`
+
 ## Member 3 Modeling Pipeline
 
 Generate the first Team Jarvis submission:

@@ -19,6 +19,8 @@ Member 1 implemented a reproducible Bronze -> Silver -> Rejected pipeline. Bronz
 - `transactions_history_final.csv`: rejected non-positive sales values, invalid dates, orphan outlet/distributor IDs, and duplicate outlet-month-distributor-SKU keys after the first occurrence.
 - `distributor_seasonality_details.csv`: normalized seasonality casing/hyphenation before validating canonical labels (`Moderate`, `Favorable`, `Un-Favorable`).
 - `holiday_list.csv`: parsed holiday dates and removed exact duplicate holiday records while preserving multiple different holidays on the same date.
+- Handoff files: created `monthly_outlet_volume.csv`, `clean_outlet_locations.csv`, and `outlet_base_features.csv` so POI and modeling work can start from stable Silver contracts.
+- Modeling flags: surfaced missing history, low activity, sudden recent drops, volume spikes, high variability, and coordinate quality as soft flags rather than hard filters.
 
 ## Silver Coordinate Contract
 
