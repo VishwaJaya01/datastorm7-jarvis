@@ -49,13 +49,17 @@ Raw data
 -> Final submission CSV
 ```
 
-Run the Member 1 Bronze/Silver handoff pipeline from the repository root:
+Run the final reproducible pipeline from the repository root:
 
 ```bash
-python3 -m src.data.silver_pipeline
+python -m src.data.silver_pipeline
+python -m src.poi.scrape_poi_features
+python -m src.features.build_master_features
+python -m src.pipeline.make_submission
+python -m src.pipeline.validate_submission
 ```
 
-The command expects the Kaggle CSV files in `data/raw/` and writes cleaned Silver tables, rejected-record audit files, and report summaries. Key handoff outputs are:
+The Silver command expects the Kaggle CSV files in `data/raw/` and writes cleaned Silver tables, rejected-record audit files, and report summaries. Key handoff outputs are:
 
 - `data/silver/monthly_outlet_volume.csv`
 - `data/silver/clean_outlet_locations.csv`
@@ -67,7 +71,7 @@ The command expects the Kaggle CSV files in `data/raw/` and writes cleaned Silve
 
 ## Member 3 Modeling Pipeline
 
-Generate the first Team Jarvis submission:
+Generate the final Team Jarvis submission:
 
 ```bash
 python -m src.pipeline.make_submission
@@ -79,7 +83,7 @@ Validate the submission file:
 python -m src.pipeline.validate_submission
 ```
 
-The modeling pipeline runs in Silver-only baseline mode first. If `data/gold/master_features.csv` is available later, it can use numeric Gold/POI features in a conservative Gold-enhanced blend.
+The modeling pipeline uses `data/gold/master_features.csv` when available and falls back to the Silver-only baseline if the Gold table is missing.
 
 ## Final Deliverables
 

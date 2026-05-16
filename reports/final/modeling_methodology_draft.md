@@ -93,6 +93,12 @@ The outlet-size sanity check also showed a logical increasing pattern:
 
 This gives confidence that the baseline captures basic outlet capacity differences without requiring a black-box model.
 
+## Gold-Enhanced Final Candidate Result
+
+The Gold-enhanced model validation passed with 20,000 outlet predictions, no missing predictions, no duplicate `Outlet_ID`s, and all positive values. The final median potential was 111.92L, mean was 303.13L, P90 was 749.35L, and max was 1860.17L.
+
+The Gold table is generated from all Silver outlet master rows and joined with POI v2 features. Outlets without valid coordinates are preserved as POI-blind rather than dropped, keeping the submission aligned with the required 20,000-outlet coverage.
+
 ## Methodology Summary
 
 Our first model is a Silver-only explainable baseline. It estimates outlet potential using high-but-credible historical monthly sales, January distributor seasonality, and peer benchmarking. It avoids overinflating predictions through conservative blending and sanity caps.
