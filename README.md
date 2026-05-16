@@ -49,6 +49,42 @@ Raw data
 -> Final submission CSV
 ```
 
+Run the final reproducible pipeline from the repository root:
+
+```bash
+python -m src.data.silver_pipeline
+python -m src.poi.scrape_poi_features
+python -m src.features.build_master_features
+python -m src.pipeline.make_submission
+python -m src.pipeline.validate_submission
+```
+
+The Silver command expects the Kaggle CSV files in `data/raw/` and writes cleaned Silver tables, rejected-record audit files, and report summaries. Key handoff outputs are:
+
+- `data/silver/monthly_outlet_volume.csv`
+- `data/silver/clean_outlet_locations.csv`
+- `data/silver/outlet_base_features.csv`
+- `reports/eda/rejection_summary_by_dataset.csv`
+- `reports/eda/rejection_summary_by_reason.csv`
+- `reports/eda/warning_summary.csv`
+- `reports/eda/correction_summary.csv`
+
+## Member 3 Modeling Pipeline
+
+Generate the final Team Jarvis submission:
+
+```bash
+python -m src.pipeline.make_submission
+```
+
+Validate the submission file:
+
+```bash
+python -m src.pipeline.validate_submission
+```
+
+The modeling pipeline uses `data/gold/master_features.csv` when available and falls back to the Silver-only baseline if the Gold table is missing.
+
 ## Final Deliverables
 
 - `submissions/teamname_predictions.csv`

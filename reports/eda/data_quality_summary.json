@@ -1,0 +1,57 @@
+{
+  "outlet_master": {
+    "raw_rows": 20000,
+    "bronze_rows": 20000,
+    "silver_rows": 20000,
+    "hard_rejected_rows": 0,
+    "hard_rejected_events": 0,
+    "warning_rows": 196,
+    "warning_events": 196,
+    "corrected_rows": 0,
+    "action_taken": "Standardized outlet categories; retained missing Outlet_Size as Unknown with warning flag."
+  },
+  "outlet_coordinates": {
+    "raw_rows": 20000,
+    "bronze_rows": 20000,
+    "silver_rows": 19960,
+    "hard_rejected_rows": 40,
+    "hard_rejected_events": 80,
+    "warning_rows": 0,
+    "warning_events": 0,
+    "corrected_rows": 200,
+    "action_taken": "Corrected safe lat/lon swaps; removed unusable coordinates from Silver and surfaced coord_status on outlets."
+  },
+  "distributor_seasonality_details": {
+    "raw_rows": 360,
+    "bronze_rows": 360,
+    "silver_rows": 360,
+    "hard_rejected_rows": 0,
+    "hard_rejected_events": 0,
+    "warning_rows": 0,
+    "warning_events": 0,
+    "corrected_rows": 0,
+    "action_taken": "Canonicalized seasonality labels and validated distributor-month keys."
+  },
+  "holiday_list": {
+    "raw_rows": 349,
+    "bronze_rows": 349,
+    "silver_rows": 256,
+    "hard_rejected_rows": 93,
+    "hard_rejected_events": 93,
+    "warning_rows": 0,
+    "warning_events": 0,
+    "corrected_rows": 0,
+    "action_taken": "Removed exact duplicate holidays and preserved distinct same-date holidays."
+  },
+  "transactions_history_final": {
+    "raw_rows": 2376389,
+    "bronze_rows": 2376389,
+    "silver_rows": 2339409,
+    "hard_rejected_rows": 36980,
+    "hard_rejected_events": 41846,
+    "warning_rows": 0,
+    "warning_events": 0,
+    "corrected_rows": 0,
+    "action_taken": "Rejected non-positive values, duplicate composite keys, invalid dates, and FK violations."
+  }
+}
