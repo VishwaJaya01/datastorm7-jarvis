@@ -49,6 +49,22 @@ Raw data
 -> Final submission CSV
 ```
 
+## Member 3 Modeling Pipeline
+
+Generate the first Team Jarvis submission:
+
+```bash
+python -m src.pipeline.make_submission
+```
+
+Validate the submission file:
+
+```bash
+python -m src.pipeline.validate_submission
+```
+
+The modeling pipeline runs in Silver-only baseline mode first. If `data/gold/master_features.csv` is available later, it can use numeric Gold/POI features in a conservative Gold-enhanced blend.
+
 ## Final Deliverables
 
 - `submissions/teamname_predictions.csv`
