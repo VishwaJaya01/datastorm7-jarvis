@@ -55,3 +55,44 @@ This is directionally reasonable because larger outlets are expected to have hig
 - The output is valid for submission format, but it should be improved using Gold features once available.
 - The top predictions are capped around 1854 liters, which prevents uncontrolled extreme values.
 - The baseline is explainable and conservative, making it useful as a fallback model.
+
+## Gold-Enhanced Final Candidate Validation
+
+## Model Version
+
+**Version:** Gold-enhanced final candidate  
+**Mode:** Gold-enhanced  
+**Generated from:** Cleaned Silver data plus Gold/POI features  
+**Output file:** `submissions/teamname_predictions.csv`
+
+## Validation Result
+
+The Gold-enhanced final candidate passed validation successfully.
+
+| Check | Result |
+|---|---|
+| Total outlet predictions | 20,000 |
+| Missing predictions | 0 |
+| Duplicate Outlet_IDs | 0 |
+| Negative / zero predictions | 0 |
+| Required columns present | Yes |
+| Output columns | `Outlet_ID`, `Maximum_Monthly_Liters` |
+
+## Prediction Distribution
+
+| Metric | Maximum_Monthly_Liters |
+|---|---:|
+| Min | 27.7537 |
+| P25 | 84.6281 |
+| Median | 111.9242 |
+| Mean | 303.1323 |
+| P75 | 253.9870 |
+| P90 | 749.3471 |
+| Max | 1860.1664 |
+
+## Notes
+
+- The final candidate uses the Gold feature table generated from Silver outlets and POI v2 features.
+- All 20,000 required outlets are represented.
+- POI-blind outlets are retained with safe zero-filled POI signals.
+- The prediction distribution remains close to the Silver-only baseline while incorporating the Gold feature layer.
