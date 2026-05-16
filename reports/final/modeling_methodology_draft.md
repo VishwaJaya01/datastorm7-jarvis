@@ -65,6 +65,42 @@ The first version avoids overinflating potential by:
 
 If `data/gold/master_features.csv` becomes available, the pipeline can run in Gold-enhanced mode. It safely detects numeric Gold columns without assuming exact POI names and applies only a small conservative multiplier. This allows Member 2's POI/catchment signals to improve ranking later without replacing the Silver evidence.
 
+## Baseline V1 Result
+
+The first working model is a **Silver-only explainable baseline**. It estimates latent outlet potential using cleaned historical transaction data, January seasonality adjustment, and peer benchmarking.
+
+The baseline passed the submission validation checks:
+
+- 20,000 outlet predictions generated
+- No missing predictions
+- No duplicate `Outlet_ID`s
+- All predictions are positive
+- Output contains the required columns only: `Outlet_ID` and `Maximum_Monthly_Liters`
+
+The prediction distribution was reasonable for a first conservative model:
+
+- Median: 112.21 liters
+- Mean: 302.45 liters
+- P90: 746.95 liters
+- Max: 1854.00 liters
+
+The outlet-size sanity check also showed a logical increasing pattern:
+
+- Small outlets: approximately 95L mean potential
+- Medium outlets: approximately 238L mean potential
+- Large outlets: approximately 736L mean potential
+- Extra Large outlets: approximately 1665L mean potential
+
+This gives confidence that the baseline captures basic outlet capacity differences without requiring a black-box model.
+
+## Methodology Summary
+
+Our first model is a Silver-only explainable baseline. It estimates outlet potential using high-but-credible historical monthly sales, January distributor seasonality, and peer benchmarking. It avoids overinflating predictions through conservative blending and sanity caps.
+
+Historical sales are treated as censored observations because observed sales may be limited by stockouts, credit limits, delivery constraints, or poor outlet execution. Therefore, the model does not simply use average historical sales. Instead, it uses high but credible historical performance signals, then blends them with peer-group potential and seasonality.
+
+This baseline acts as a safe fallback model. Once the Gold feature table from Member 2 is available, the model can be rerun in Gold-enhanced mode to incorporate POI and catchment signals.
+
 ## Limitations
 
 This first version is a transparent baseline, not a final optimized model. It does not yet learn nonlinear interactions, SKU mix effects, explicit constraint probabilities, or detailed POI feature importance. It is designed to produce a valid, explainable first submission and create a stable foundation for later model improvements.
