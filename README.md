@@ -85,6 +85,32 @@ python -m src.pipeline.validate_submission
 
 The modeling pipeline uses `data/gold/master_features.csv` when available and falls back to the Silver-only baseline if the Gold table is missing.
 
+## Round 2 / Prototype Round Extension
+
+This repository continues from the DataStorm 7.0 preliminary round. The existing Round 1 Bronze -> Silver -> Gold pipeline remains the foundation for Round 2 work.
+
+Round 2 will add:
+
+- Distance-decay spatial features
+- Competitor density and market saturation features
+- Western Province LKR 5 million spend optimization
+- XAI explanations
+- Outlet Intelligence Web App
+- Round 2 prediction and budget allocation outputs
+
+Planned Round 2 commands:
+
+```bash
+python -m src.data.silver_pipeline
+python -m src.poi.scrape_poi_features
+python -m src.features.build_master_features
+python -m src.spatial.distance_decay_features
+python -m src.spatial.competitor_density
+python -m src.pipeline.make_round2_submission
+python -m src.pipeline.validate_round2_submission
+streamlit run app/streamlit_app.py
+```
+
 ## Final Deliverables
 
 - `submissions/teamname_predictions.csv`
