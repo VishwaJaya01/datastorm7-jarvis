@@ -15,12 +15,15 @@ from src.quality.checks import (
     CheckResult,
     build_rejected_records,
     combine_failure_masks,
+    coordinate_quality_check,
+    cross_table_coverage_check,
     duplicate_check,
     null_check,
     numeric_range_check,
     referential_integrity_check,
     value_set_check,
 )
+from src.spatial.competitor_density import compute_competitor_density
 
 
 RAW_FILES = {
@@ -120,6 +123,15 @@ def run_pipeline(paths: PipelinePaths | None = None) -> dict[str, dict[str, int]
     write_handoff_outputs(paths)
     validate_handoff_outputs(paths)
     write_report_ready_summaries(paths)
+
+    # Round 2: competitor density spatial features.
+    density_features = compute_competitor_density(
+        locations_path=paths.silver / "clean_outlet_locations.csv",
+        output_path=paths.silver / "competitor_density_features.csv",
+        report_path=paths.reports_eda / "competitor_density_summary.json",
+    )
+    validate_competitor_density(paths, density_features)
+
     metrics = build_pipeline_metrics(paths)
     write_schema_contract(paths)
     write_forensics_report(paths, metrics)
@@ -406,6 +418,41 @@ def validate_silver_outputs(paths: PipelinePaths | None = None) -> None:
     assert set(transactions["Distributor_ID"]).issubset(EXPECTED_DISTRIBUTORS), "Transaction distributor FK violation"
     assert set(seasonality["Seasonality_Index"]).issubset(VALID_SEASONALITY), "Seasonality labels are not canonical"
     assert not holidays.duplicated(["Date", "Holiday_Name", "Holiday_Type"]).any(), "Exact duplicate holidays remain"
+
+
+def validate_competitor_density(paths: PipelinePaths, features: pd.DataFrame) -> None:
+    """Fail fast if competitor density output violates the spatial handoff contract."""
+
+    coordinates = pd.read_csv(paths.silver / "outlet_coordinates.csv")
+    expected_ids = set(coordinates["Outlet_ID"])
+    actual_ids = set(features["Outlet_ID"])
+
+    assert actual_ids == expected_ids, (
+        f"Competitor density outlets ({len(actual_ids)}) must exactly match "
+        f"usable coordinate outlets ({len(expected_ids)})"
+    )
+    assert features["Outlet_ID"].is_unique, "Competitor density must have unique Outlet_ID values"
+
+    required_columns = {
+        "nearby_outlets_250m",
+        "nearby_outlets_500m",
+        "nearby_outlets_1000m",
+        "competitor_density_score",
+        "market_saturation_index",
+        "isolated_outlet_flag",
+        "high_competition_cluster_flag",
+    }
+    assert required_columns.issubset(features.columns), (
+        f"Competitor density missing columns: {required_columns - set(features.columns)}"
+    )
+    for col in ["nearby_outlets_250m", "nearby_outlets_500m", "nearby_outlets_1000m"]:
+        assert (features[col] >= 0).all(), f"{col} contains negative counts"
+    assert features["market_saturation_index"].between(0, 1).all(), (
+        "market_saturation_index must be in [0, 1]"
+    )
+    assert features["competitor_density_score"].notna().all(), (
+        "competitor_density_score contains NaN values"
+    )
 
 
 def write_handoff_outputs(paths: PipelinePaths | None = None) -> None:
@@ -711,8 +758,33 @@ def write_schema_contract(paths: PipelinePaths | None = None) -> None:
         "- `outlet_coordinates.Outlet_ID` must exist in `outlet_master.Outlet_ID`.",
         "- `outlet_master[has_valid_coord=True].Outlet_ID` must exactly match `outlet_coordinates.Outlet_ID`.",
         "- Outlets with `coord_status` of `quarantined` or `missing` must not appear in `outlet_coordinates.csv`.",
+        "- `competitor_density_features.Outlet_ID` must exactly match `outlet_coordinates.Outlet_ID`.",
         "",
     ]
+
+    density_path = paths.silver / "competitor_density_features.csv"
+    if density_path.exists():
+        density_rows = len(pd.read_csv(density_path))
+        lines.extend([
+            "## Competitor Density Features",
+            "",
+            f"| File | Rows | Description |",
+            f"|---|---:|---|",
+            f"| competitor_density_features.csv | {density_rows} | Per-outlet spatial density features (nearby counts at 250m/500m/1000m, gravity density score, saturation index, isolation/cluster flags). |",
+            "",
+            "| Column | Type | Description |",
+            "|---|---|---|",
+            "| `Outlet_ID` | string | FK to outlet_master and outlet_coordinates |",
+            "| `nearby_outlets_250m` | int | Count of other outlets within 250m |",
+            "| `nearby_outlets_500m` | int | Count of other outlets within 500m |",
+            "| `nearby_outlets_1000m` | int | Count of other outlets within 1000m |",
+            "| `competitor_density_score` | float | Gravity-weighted density Σ 1/(1+d_km) within 1000m |",
+            "| `market_saturation_index` | float | Percentile rank of density score (0.0–1.0) |",
+            "| `isolated_outlet_flag` | bool | True if no other outlets within 500m |",
+            "| `high_competition_cluster_flag` | bool | True if nearby_outlets_500m ≥ 90th percentile |",
+            "",
+        ])
+
     (paths.reports_eda / "silver_schema_contract.md").write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -751,12 +823,36 @@ def write_forensics_report(paths: PipelinePaths, metrics: dict[str, dict[str, in
             "",
             "`coord_status` uses four values: `valid` and `corrected` have usable Silver coordinate rows; `quarantined` had a coordinate row that failed DQ; `missing` means no coordinate row was supplied for that outlet. `has_valid_coord` is true only for `valid` and `corrected` outlets.",
             "",
-            "## Business Impact",
-            "",
-            "The Silver layer protects downstream POI enrichment and latent-potential modeling from legacy SFA/ERP artifacts such as impossible store locations, negative sales, duplicated records, and decayed master data. Outlets marked `quarantined` or `missing` for coordinates are POI-blind, so Members 2 and 3 can treat their geographic potential signals separately instead of silently assuming location quality. Missing outlet size is retained rather than dropped because excluding those outlets would risk incomplete final predictions. The rejected and warning layers preserve auditability for judging and let the team revisit quarantined records later if a modeling recovery rule is justified.",
-            "",
         ]
     )
+
+    # Append Round 2 competitor density section.
+    density_report_path = paths.reports_eda / "competitor_density_summary.json"
+    if density_report_path.exists():
+        density_summary = json.loads(density_report_path.read_text(encoding="utf-8"))
+        lines.extend([
+            "## Competitor Density Features (Round 2)",
+            "",
+            "Member 1 computed spatial competitor density features using a BallTree with haversine distance on Silver outlet coordinates.",
+            "",
+            "| Metric | Value |",
+            "|---|---|",
+            f"| Outlets with density features | {density_summary['total_outlets']} |",
+            f"| Isolated outlets (no neighbours within 500m) | {density_summary['isolated_outlets']} ({density_summary['isolated_outlets']/density_summary['total_outlets']*100:.1f}%) |",
+            f"| High-competition outlets (≥90th pctl) | {density_summary['high_competition_outlets']} ({density_summary['high_competition_outlets']/density_summary['total_outlets']*100:.1f}%) |",
+            f"| Median nearby outlets (250m / 500m / 1000m) | {density_summary['nearby_outlets_250m']['median']:.0f} / {density_summary['nearby_outlets_500m']['median']:.0f} / {density_summary['nearby_outlets_1000m']['median']:.0f} |",
+            f"| Competitor density score (min / median / max) | {density_summary['competitor_density_score']['min']:.4f} / {density_summary['competitor_density_score']['median']:.4f} / {density_summary['competitor_density_score']['max']:.4f} |",
+            "",
+        ])
+
+    lines.extend([
+        "## Business Impact",
+        "",
+        "The Silver layer protects downstream POI enrichment and latent-potential modeling from legacy SFA/ERP artifacts such as impossible store locations, negative sales, duplicated records, and decayed master data. Outlets marked `quarantined` or `missing` for coordinates are POI-blind, so Members 2 and 3 can treat their geographic potential signals separately instead of silently assuming location quality. Missing outlet size is retained rather than dropped because excluding those outlets would risk incomplete final predictions. The rejected and warning layers preserve auditability for judging and let the team revisit quarantined records later if a modeling recovery rule is justified.",
+        "",
+        "Round 2 competitor density features quantify local market saturation: isolated outlets signal untapped geographic potential while high-competition clusters may face demand capping. These spatial signals complement POI catchment features and give Member 3 richer inputs for estimating latent demand.",
+        "",
+    ])
     (paths.reports_eda / "data_forensics_pipeline.md").write_text("\n".join(lines), encoding="utf-8")
 
 

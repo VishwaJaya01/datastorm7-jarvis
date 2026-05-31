@@ -35,3 +35,21 @@ This contract defines the Silver-layer files consumed by POI enrichment and mode
 - `outlet_coordinates.Outlet_ID` must exist in `outlet_master.Outlet_ID`.
 - `outlet_master[has_valid_coord=True].Outlet_ID` must exactly match `outlet_coordinates.Outlet_ID`.
 - Outlets with `coord_status` of `quarantined` or `missing` must not appear in `outlet_coordinates.csv`.
+- `competitor_density_features.Outlet_ID` must exactly match `outlet_coordinates.Outlet_ID`.
+
+## Competitor Density Features
+
+| File | Rows | Description |
+|---|---:|---|
+| competitor_density_features.csv | 19960 | Per-outlet spatial density features (nearby counts at 250m/500m/1000m, gravity density score, saturation index, isolation/cluster flags). |
+
+| Column | Type | Description |
+|---|---|---|
+| `Outlet_ID` | string | FK to outlet_master and outlet_coordinates |
+| `nearby_outlets_250m` | int | Count of other outlets within 250m |
+| `nearby_outlets_500m` | int | Count of other outlets within 500m |
+| `nearby_outlets_1000m` | int | Count of other outlets within 1000m |
+| `competitor_density_score` | float | Gravity-weighted density Σ 1/(1+d_km) within 1000m |
+| `market_saturation_index` | float | Percentile rank of density score (0.0–1.0) |
+| `isolated_outlet_flag` | bool | True if no other outlets within 500m |
+| `high_competition_cluster_flag` | bool | True if nearby_outlets_500m ≥ 90th percentile |
