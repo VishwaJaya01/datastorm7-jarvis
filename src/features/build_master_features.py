@@ -16,6 +16,7 @@ import pandas as pd
 OUTLET_MASTER_PATH = Path("data/silver/outlet_master.csv")
 OUTLET_BASE_FEATURES_PATH = Path("data/silver/outlet_base_features.csv")
 POI_FEATURES_PATH = Path("data/external/outlet_poi_features_v2.csv")
+COMPETITOR_DENSITY_PATH = Path("data/silver/competitor_density_features.csv")
 OUTPUT_PATH = Path("data/gold/master_features.csv")
 
 POI_COUNT_PREFIXES = (
@@ -47,11 +48,23 @@ DERIVED_COLUMNS = [
     "catchment_class",
 ]
 
+# Competitor density feature columns produced by src.spatial.competitor_density.
+COMPETITOR_DENSITY_COLUMNS = [
+    "nearby_outlets_250m",
+    "nearby_outlets_500m",
+    "nearby_outlets_1000m",
+    "competitor_density_score",
+    "market_saturation_index",
+    "isolated_outlet_flag",
+    "high_competition_cluster_flag",
+]
+
 
 def build_master_features(
     outlet_master_path: Path = OUTLET_MASTER_PATH,
     outlet_base_features_path: Path = OUTLET_BASE_FEATURES_PATH,
     poi_features_path: Path = POI_FEATURES_PATH,
+    competitor_density_path: Path = COMPETITOR_DENSITY_PATH,
     output_path: Path = OUTPUT_PATH,
 ) -> pd.DataFrame:
     """Build and save the Gold master feature table."""
@@ -67,6 +80,16 @@ def build_master_features(
 
     poi_features = read_required_csv(poi_features_path, required_columns={"Outlet_ID"})
     master = left_join_new_columns(master, dedupe_by_outlet(poi_features, str(poi_features_path)))
+
+    # Round 2: competitor density features.
+    if competitor_density_path.exists():
+        density_features = pd.read_csv(competitor_density_path)
+        density_features = dedupe_by_outlet(density_features, str(competitor_density_path))
+        master = left_join_new_columns(master, density_features)
+        print(f"Joined competitor density features from {competitor_density_path} "
+              f"({len(density_features)} outlets)")
+    else:
+        print(f"Optional competitor density file not found; continuing without it: {competitor_density_path}")
 
     master = normalize_poi_features(master)
     validate_master_features(master, expected_rows=len(outlet_master))
@@ -134,6 +157,32 @@ def normalize_poi_features(master: pd.DataFrame) -> pd.DataFrame:
     normalized["demand_score_rank_500m"] = positive_percentile_rank(normalized["demand_driver_score_500m"])
     normalized["demand_score_rank_1000m"] = positive_percentile_rank(normalized["demand_driver_score_1000m"])
     normalized["catchment_class"] = build_catchment_class(normalized)
+
+    # Normalize competitor density features (zero-fill POI-blind outlets).
+    for col in ["nearby_outlets_250m", "nearby_outlets_500m", "nearby_outlets_1000m"]:
+        if col not in normalized:
+            normalized[col] = 0
+        normalized[col] = pd.to_numeric(normalized[col], errors="coerce").fillna(0).astype(int)
+
+    if "competitor_density_score" not in normalized:
+        normalized["competitor_density_score"] = 0.0
+    normalized["competitor_density_score"] = pd.to_numeric(
+        normalized["competitor_density_score"], errors="coerce"
+    ).fillna(0.0)
+
+    if "market_saturation_index" not in normalized:
+        normalized["market_saturation_index"] = 0.0
+    normalized["market_saturation_index"] = pd.to_numeric(
+        normalized["market_saturation_index"], errors="coerce"
+    ).fillna(0.0)
+
+    for flag_col in ["isolated_outlet_flag", "high_competition_cluster_flag"]:
+        if flag_col not in normalized:
+            normalized[flag_col] = False
+        normalized[flag_col] = normalize_boolean_series(normalized[flag_col], index=normalized.index)
+    # POI-blind outlets default to isolated=True, high_competition=False.
+    normalized.loc[poi_blind_mask, "isolated_outlet_flag"] = True
+    normalized.loc[poi_blind_mask, "high_competition_cluster_flag"] = False
 
     return normalized
 
