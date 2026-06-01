@@ -89,7 +89,7 @@ The modeling pipeline uses `data/gold/master_features.csv` when available and fa
 
 This repository continues from the DataStorm 7.0 preliminary round. The existing Round 1 Bronze -> Silver -> Gold pipeline remains the foundation for Round 2 work.
 
-Round 2 will add:
+Round 2 adds:
 
 - Distance-decay spatial features
 - Competitor density and market saturation features
@@ -98,18 +98,27 @@ Round 2 will add:
 - Outlet Intelligence Web App
 - Round 2 prediction and budget allocation outputs
 
-Planned Round 2 commands:
+Final Round 2 commands:
 
 ```bash
 python -m src.data.silver_pipeline
-python -m src.poi.scrape_poi_features
-python -m src.features.build_master_features
-python -m src.spatial.distance_decay_features
 python -m src.spatial.competitor_density
+python -m src.poi.scrape_poi_features
+python -m src.features.build_spatial_decay
+python -m src.features.build_master_features
 python -m src.pipeline.make_round2_submission
 python -m src.pipeline.validate_round2_submission
 streamlit run app/streamlit_app.py
 ```
+
+Round 2 outputs:
+
+- `submissions/jarvis_predictions.csv`
+- `submissions/jarvis_budget_allocations.csv`
+
+The app can run without an API key using deterministic XAI fallback explanations from structured outlet facts. An optional LLM/API explanation layer can be added later, but generated explanations must use only provided facts and must not change predictions or budget allocations.
+
+Raw files, generated intermediate datasets, and submission CSV outputs should not be committed.
 
 ## Final Deliverables
 
