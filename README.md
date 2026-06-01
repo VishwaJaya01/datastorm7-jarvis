@@ -98,7 +98,7 @@ Latest local validation evidence:
 - `src/xai/`: Deterministic and optional LLM explanation helpers.
 - `app/`: Streamlit Outlet Intelligence app.
 - `reports/`: EDA, validation, decision logs, GenAI logs, and final reporting artifacts.
-- `submissions/`: Generated competition submission outputs, ignored by Git.
+- `submissions/`: Round 2 prediction and budget allocation outputs.
 
 ## Setup
 
@@ -108,13 +108,11 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Download the competition dataset files from Kaggle and place them in:
+Place the competition dataset files in:
 
 ```text
 data/raw/
 ```
-
-Raw data files are not committed to GitHub.
 
 ## App and XAI
 
@@ -126,14 +124,14 @@ streamlit run app/streamlit_app.py
 
 The app works without an API key by using deterministic XAI fallback explanations from structured outlet facts.
 
-Optional LLM explanations can be enabled locally with Streamlit secrets or environment variables:
+Optional LLM explanations can be enabled with Streamlit secrets or environment variables:
 
 ```text
 USE_LLM_EXPLANATIONS=true
-GEMINI_API_KEY=your_local_key_here
+GEMINI_API_KEY=<gemini_api_key>
 ```
 
-LLM explanations must use only provided facts and must not invent numbers, change predictions, or change budget allocations. Do not commit API keys or local secrets.
+LLM explanations are constrained to the provided outlet facts and do not change predictions or budget allocations.
 
 ## Preliminary Round Foundation
 
@@ -153,14 +151,3 @@ The Silver pipeline writes cleaned datasets, rejected-record audit files, and re
 - `reports/eda/rejection_summary_by_reason.csv`
 - `reports/eda/warning_summary.csv`
 - `reports/eda/correction_summary.csv`
-
-## Data Policy
-
-Do not commit:
-
-- raw Kaggle data
-- generated Bronze/Silver/Gold/external/rejected CSV files
-- generated submission CSV files
-- API keys, `.env` files, Streamlit secrets, or Kaggle credentials
-- virtual environments, caches, or large generated artifacts
-
