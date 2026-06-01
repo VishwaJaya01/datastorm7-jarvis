@@ -116,6 +116,16 @@ Round 2 outputs:
 - `submissions/jarvis_predictions.csv`
 - `submissions/jarvis_budget_allocations.csv`
 
+The prediction output contains exactly:
+
+- `Outlet_ID`
+- `Maximum_Monthly_Liters`
+
+The budget allocation output contains exactly:
+
+- `Outlet_ID`
+- `Trade_Spend_Allocation_LKR`
+
 The app can run without an API key using deterministic XAI fallback explanations from structured outlet facts. An optional LLM/API explanation layer can be added later, but generated explanations must use only provided facts and must not change predictions or budget allocations.
 
 Optional LLM explanations can be enabled locally with Streamlit secrets or environment variables:
@@ -129,12 +139,30 @@ Do not commit API keys or local secrets.
 
 Raw files, generated intermediate datasets, and submission CSV outputs should not be committed.
 
+### Round 2 Validation Snapshot
+
+Latest local validation evidence:
+
+- Prediction rows: 20,000
+- Missing predictions: 0
+- Duplicate `Outlet_ID`s: 0
+- Median prediction: 111.9846 liters
+- Mean prediction: 302.9689 liters
+- Max prediction: 1857.8529 liters
+- Western outlets considered for budget allocation: 9,000
+- Funded Western Province outlets: 300
+- Total budget allocated: LKR 5,000,000
+- Remaining budget: LKR 0
+- Streamlit app local startup: passed
+
 ## Final Deliverables
 
-- `submissions/teamname_predictions.csv`
-- Reproducible codebase
-- `reports/final/final_report.pdf`
+- `submissions/jarvis_predictions.csv`
+- `submissions/jarvis_budget_allocations.csv`
+- Reproducible Bronze -> Silver -> Gold -> Modeling -> Optimization codebase
+- Outlet Intelligence Streamlit Web App
+- Round 2 technical paper and pitch deck artifacts
 
 ## Notes
 
-Raw data files and generated intermediate datasets are not committed to GitHub.
+Raw data files, generated intermediate datasets, API keys, local secrets, and generated submission CSV files are not committed to GitHub.
