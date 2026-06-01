@@ -26,6 +26,20 @@ Member 1 implemented a reproducible Bronze -> Silver -> Rejected pipeline. Bronz
 
 `coord_status` uses four values: `valid` and `corrected` have usable Silver coordinate rows; `quarantined` had a coordinate row that failed DQ; `missing` means no coordinate row was supplied for that outlet. `has_valid_coord` is true only for `valid` and `corrected` outlets.
 
+## Competitor Density Features (Round 2)
+
+Member 1 computed spatial competitor density features using a BallTree with haversine distance on Silver outlet coordinates.
+
+| Metric | Value |
+|---|---|
+| Outlets with density features | 19960 |
+| Isolated outlets (no neighbours within 500m) | 4209 (21.1%) |
+| High-competition outlets (≥90th pctl) | 3090 (15.5%) |
+| Median nearby outlets (250m / 500m / 1000m) | 0 / 2 / 7 |
+| Competitor density score (min / median / max) | 0.0000 / 4.3082 / 20.1688 |
+
 ## Business Impact
 
 The Silver layer protects downstream POI enrichment and latent-potential modeling from legacy SFA/ERP artifacts such as impossible store locations, negative sales, duplicated records, and decayed master data. Outlets marked `quarantined` or `missing` for coordinates are POI-blind, so Members 2 and 3 can treat their geographic potential signals separately instead of silently assuming location quality. Missing outlet size is retained rather than dropped because excluding those outlets would risk incomplete final predictions. The rejected and warning layers preserve auditability for judging and let the team revisit quarantined records later if a modeling recovery rule is justified.
+
+Round 2 competitor density features quantify local market saturation: isolated outlets signal untapped geographic potential while high-competition clusters may face demand capping. These spatial signals complement POI catchment features and give Member 3 richer inputs for estimating latent demand.

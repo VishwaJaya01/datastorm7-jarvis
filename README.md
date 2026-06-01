@@ -85,6 +85,50 @@ python -m src.pipeline.validate_submission
 
 The modeling pipeline uses `data/gold/master_features.csv` when available and falls back to the Silver-only baseline if the Gold table is missing.
 
+## Round 2 / Prototype Round Extension
+
+This repository continues from the DataStorm 7.0 preliminary round. The existing Round 1 Bronze -> Silver -> Gold pipeline remains the foundation for Round 2 work.
+
+Round 2 adds:
+
+- Distance-decay spatial features
+- Competitor density and market saturation features
+- Western Province LKR 5 million spend optimization
+- XAI explanations
+- Outlet Intelligence Web App
+- Round 2 prediction and budget allocation outputs
+
+Final Round 2 commands:
+
+```bash
+python -m src.data.silver_pipeline
+python -m src.spatial.competitor_density
+python -m src.poi.scrape_poi_features
+python -m src.features.build_spatial_decay
+python -m src.features.build_master_features
+python -m src.pipeline.make_round2_submission
+python -m src.pipeline.validate_round2_submission
+streamlit run app/streamlit_app.py
+```
+
+Round 2 outputs:
+
+- `submissions/jarvis_predictions.csv`
+- `submissions/jarvis_budget_allocations.csv`
+
+The app can run without an API key using deterministic XAI fallback explanations from structured outlet facts. An optional LLM/API explanation layer can be added later, but generated explanations must use only provided facts and must not change predictions or budget allocations.
+
+Optional LLM explanations can be enabled locally with Streamlit secrets or environment variables:
+
+```text
+USE_LLM_EXPLANATIONS=true
+GEMINI_API_KEY=your_local_key_here
+```
+
+Do not commit API keys or local secrets.
+
+Raw files, generated intermediate datasets, and submission CSV outputs should not be committed.
+
 ## Final Deliverables
 
 - `submissions/teamname_predictions.csv`

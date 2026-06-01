@@ -170,6 +170,78 @@ def referential_integrity_check(
     )
 
 
+def coordinate_quality_check(
+    df: pd.DataFrame,
+    lat_column: str = "Latitude",
+    lon_column: str = "Longitude",
+    lat_range: tuple[float, float] = (5.0, 10.0),
+    lon_range: tuple[float, float] = (79.0, 82.0),
+    check_name: str = "coordinate_quality_check",
+) -> CheckResult:
+    """Flag rows with null, non-numeric, or out-of-bounds coordinate pairs.
+
+    Unlike separate ``numeric_range_check`` calls on latitude and longitude,
+    this check treats *both* columns as a single unit and produces one combined
+    failure mask with a unified failure reason.
+    """
+
+    missing_cols = _missing_columns(df, [lat_column, lon_column])
+    if missing_cols:
+        return CheckResult(
+            mask=pd.Series(True, index=df.index),
+            check_name=check_name,
+            failure_reason=f"Coordinate columns missing: {', '.join(missing_cols)}",
+        )
+
+    lat = pd.to_numeric(df[lat_column], errors="coerce")
+    lon = pd.to_numeric(df[lon_column], errors="coerce")
+
+    mask = (
+        lat.isna()
+        | lon.isna()
+        | ~lat.between(lat_range[0], lat_range[1], inclusive="both")
+        | ~lon.between(lon_range[0], lon_range[1], inclusive="both")
+    )
+    return CheckResult(
+        mask=mask,
+        check_name=check_name,
+        failure_reason=(
+            f"Coordinates are null/non-numeric or outside bounding box "
+            f"lat {lat_range}, lon {lon_range}"
+        ),
+    )
+
+
+def cross_table_coverage_check(
+    df: pd.DataFrame,
+    column: str,
+    expected_values: Iterable[object],
+    check_name: str | None = None,
+) -> CheckResult:
+    """Flag rows whose key is *not* in an expected set of values.
+
+    This is the inverse of ``referential_integrity_check`` — use it when
+    you want to verify that *every* expected value appears in the table
+    and flag rows with unexpected values.
+    """
+
+    resolved_name = check_name or f"{column}_coverage_check"
+    if column not in df.columns:
+        return CheckResult(
+            mask=pd.Series(True, index=df.index),
+            check_name=resolved_name,
+            failure_reason=f"Coverage-check column missing: {column}",
+        )
+
+    expected = set(expected_values)
+    mask = ~df[column].isin(expected)
+    return CheckResult(
+        mask=mask,
+        check_name=resolved_name,
+        failure_reason=f"{column} is not in the expected coverage set ({len(expected)} expected values)",
+    )
+
+
 def build_rejected_records(
     df: pd.DataFrame,
     results: Sequence[CheckResult],

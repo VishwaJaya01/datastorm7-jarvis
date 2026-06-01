@@ -1,0 +1,30 @@
+{
+  "total_outlets": 19960,
+  "nearby_outlets_250m": {
+    "min": 0,
+    "median": 0.0,
+    "max": 6,
+    "mean": 0.57
+  },
+  "nearby_outlets_500m": {
+    "min": 0,
+    "median": 2.0,
+    "max": 12,
+    "mean": 2.29,
+    "p90_threshold": 5.0
+  },
+  "nearby_outlets_1000m": {
+    "min": 0,
+    "median": 7.0,
+    "max": 33,
+    "mean": 8.98
+  },
+  "competitor_density_score": {
+    "min": 0.0,
+    "median": 4.3082,
+    "max": 20.1688,
+    "mean": 5.5168
+  },
+  "isolated_outlets": 4209,
+  "high_competition_outlets": 3090
+}
