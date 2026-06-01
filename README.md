@@ -118,6 +118,15 @@ Round 2 outputs:
 
 The app can run without an API key using deterministic XAI fallback explanations from structured outlet facts. An optional LLM/API explanation layer can be added later, but generated explanations must use only provided facts and must not change predictions or budget allocations.
 
+Optional LLM explanations can be enabled locally with Streamlit secrets or environment variables:
+
+```text
+USE_LLM_EXPLANATIONS=true
+GEMINI_API_KEY=your_local_key_here
+```
+
+Do not commit API keys or local secrets.
+
 Raw files, generated intermediate datasets, and submission CSV outputs should not be committed.
 
 ## Final Deliverables

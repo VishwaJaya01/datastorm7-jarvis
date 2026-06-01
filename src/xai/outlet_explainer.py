@@ -15,29 +15,50 @@ def explain_outlet(row: Mapping[str, Any]) -> str:
 
     facts = dict(row)
     outlet_id = clean_value(facts.get("Outlet_ID"), default="this outlet")
-    lines = [f"Outlet {outlet_id} was evaluated using the available prediction, history, spatial, and allocation facts."]
+    lines = [f"Outlet {outlet_id} has been assessed using the facts available in the local Round 2 outputs."]
 
     potential = get_number(facts, "Maximum_Monthly_Liters")
-    if potential is not None:
-        lines.append(f"Predicted monthly potential is {potential:,.2f} liters.")
-
+    historical = first_number(
+        facts,
+        [
+            "historical_baseline_liters",
+            "recent_avg_monthly_volume_liters",
+            "avg_monthly_volume_liters",
+            "median_monthly_volume_liters",
+        ],
+    )
+    gap = get_number(facts, "opportunity_gap_liters")
     allocation = get_number(facts, "Trade_Spend_Allocation_LKR")
+
+    if potential is not None:
+        lines.append(f"The predicted January 2026 maximum monthly potential is {potential:,.2f} liters.")
+    if historical is not None:
+        lines.append(f"The available historical baseline is {historical:,.2f} liters.")
+    if gap is not None:
+        lines.append(f"The estimated opportunity gap is {gap:,.2f} liters.")
+
     if allocation is not None:
         if allocation > 0:
-            lines.append(f"Recommended trade spend allocation is LKR {allocation:,.2f}.")
+            lines.append(
+                f"The outlet receives LKR {allocation:,.2f} because it ranks strongly enough within the eligible "
+                "Western Province priority set."
+            )
         else:
-            lines.append("No positive trade spend allocation is recommended for this outlet in the current output.")
+            lines.append(
+                "The outlet does not receive a positive allocation in the current budget file, usually because "
+                "other eligible outlets ranked higher under the priority score."
+            )
 
     drivers = positive_drivers(facts)
     if drivers:
-        lines.append("Positive drivers: " + "; ".join(drivers) + ".")
+        lines.append("Main supporting signals: " + "; ".join(drivers) + ".")
 
     limits = limiting_factors(facts)
     if limits:
-        lines.append("Limiting factors: " + "; ".join(limits) + ".")
+        lines.append("Caution signals: " + "; ".join(limits) + ".")
 
     if len(lines) == 1:
-        lines.append("Only limited facts were provided, so the explanation is intentionally conservative.")
+        lines.append("Only limited facts were provided, so the explanation remains conservative.")
 
     return " ".join(lines)
 
@@ -46,15 +67,15 @@ def positive_drivers(facts: Mapping[str, Any]) -> list[str]:
     """Describe available positive signals without inventing values."""
 
     drivers: list[str] = []
-    add_positive_metric(drivers, facts, "demand_driver_score_1000m", "strong 1000m demand-driver POI score")
-    add_positive_metric(drivers, facts, "overall_spatial_gravity_score", "strong spatial gravity score")
+    add_positive_metric(drivers, facts, "demand_driver_score_1000m", "nearby POI demand score")
+    add_positive_metric(drivers, facts, "overall_spatial_gravity_score", "spatial gravity")
     add_positive_metric(drivers, facts, "commercial_decay_score", "nearby commercial activity")
     add_positive_metric(drivers, facts, "Cooler_Count", "cooler capacity")
-    add_positive_metric(drivers, facts, "active_month_count", "historical activity coverage")
+    add_positive_metric(drivers, facts, "active_month_count", "active transaction history")
 
     poi_available = get_bool(facts, "poi_available")
     if poi_available is True:
-        drivers.append("POI/catchment features are available")
+        drivers.append("POI/catchment features are available for this outlet")
     return drivers
 
 
@@ -70,29 +91,31 @@ def limiting_factors(facts: Mapping[str, Any]) -> list[str]:
     if coord_status and coord_status.lower() in {"quarantined", "missing", "invalid"}:
         limits.append(f"coordinate status is {coord_status}")
 
-    add_high_metric(limits, facts, "market_saturation_index", "market saturation is high")
-    add_high_metric(limits, facts, "competitor_density_score", "competitor density is high")
+    add_positive_metric(limits, facts, "market_saturation_index", "market saturation pressure")
+    add_positive_metric(limits, facts, "competitor_density_score", "competitor density pressure")
 
     low_activity = get_bool(facts, "low_activity_outlet_flag")
     if low_activity is True:
-        limits.append("historical activity is low")
+        limits.append("historical transaction activity is low")
     return limits
 
 
-def add_positive_metric(drivers: list[str], facts: Mapping[str, Any], column: str, label: str) -> None:
-    """Append a positive metric only when a positive value exists."""
+def add_positive_metric(items: list[str], facts: Mapping[str, Any], column: str, label: str) -> None:
+    """Append a metric only when a positive value exists."""
 
     value = get_number(facts, column)
     if value is not None and value > 0:
-        drivers.append(f"{label} ({column}={value:,.2f})")
+        items.append(f"{label} ({column}={value:,.2f})")
 
 
-def add_high_metric(limits: list[str], facts: Mapping[str, Any], column: str, label: str) -> None:
-    """Append a high-risk metric only when a positive value exists."""
+def first_number(facts: Mapping[str, Any], keys: list[str]) -> float | None:
+    """Return the first available numeric fact."""
 
-    value = get_number(facts, column)
-    if value is not None and value > 0:
-        limits.append(f"{label} ({column}={value:,.2f})")
+    for key in keys:
+        value = get_number(facts, key)
+        if value is not None:
+            return value
+    return None
 
 
 def get_number(facts: Mapping[str, Any], key: str) -> float | None:

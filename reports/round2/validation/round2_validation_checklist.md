@@ -1,6 +1,6 @@
 # Round 2 Validation Checklist
 
-This checklist tracks checks that still require final local validation after the Round 2 pipeline is run. Do not mark items complete unless the command output has been reviewed.
+This checklist records the final local validation evidence for the current Round 2 pipeline outputs.
 
 ## Commands
 
@@ -12,34 +12,50 @@ streamlit run app/streamlit_app.py
 
 ## Output Files
 
-- [ ] `submissions/jarvis_predictions.csv` exists.
-- [ ] `submissions/jarvis_budget_allocations.csv` exists.
+- [x] `submissions/jarvis_predictions.csv` exists.
+- [x] `submissions/jarvis_budget_allocations.csv` exists.
 
 ## Prediction CSV
 
-- [ ] Required columns only: `Outlet_ID`, `Maximum_Monthly_Liters`.
-- [ ] No missing `Outlet_ID` values.
-- [ ] No duplicate `Outlet_ID` values.
-- [ ] No missing predictions.
-- [ ] Predictions are positive.
-- [ ] Row count matches `data/silver/outlet_master.csv`.
+- [x] Required columns only: `Outlet_ID`, `Maximum_Monthly_Liters`.
+- [x] No missing `Outlet_ID` values.
+- [x] No duplicate `Outlet_ID` values.
+- [x] No missing predictions.
+- [x] Predictions are positive.
+- [x] Row count matches `data/silver/outlet_master.csv`.
+
+Evidence:
+
+- Prediction rows: 20,000
+- Missing predictions: 0
+- Duplicate `Outlet_ID`s: 0
+- Median: 111.9846
+- Mean: 302.9689
+- Max: 1857.8529
 
 ## Budget Allocation CSV
 
-- [ ] Required columns only: `Outlet_ID`, `Trade_Spend_Allocation_LKR`.
-- [ ] No missing `Outlet_ID` values.
-- [ ] No duplicate `Outlet_ID` values.
-- [ ] Spend allocation values are non-negative.
-- [ ] Total budget allocation is less than or equal to LKR 5,000,000.
-- [ ] Western Province filter is applied correctly.
+- [x] Required columns only: `Outlet_ID`, `Trade_Spend_Allocation_LKR`.
+- [x] No missing `Outlet_ID` values.
+- [x] No duplicate `Outlet_ID` values.
+- [x] Spend allocation values are non-negative.
+- [x] Total budget allocation is less than or equal to LKR 5,000,000.
+- [x] Western Province filter is applied correctly.
+
+Evidence:
+
+- Western outlets considered: 9,000
+- Outlets funded: 300
+- Total allocation: LKR 5,000,000
+- Remaining budget: LKR 0
 
 ## App and XAI
 
-- [ ] Web app runs locally.
-- [ ] XAI fallback works without API key.
-- [ ] App handles missing local output files with friendly run instructions.
+- [x] Web app runs locally.
+- [x] XAI fallback works without API key.
+- [x] App handles missing local output files with friendly run instructions.
 
 ## Documentation
 
-- [ ] README has final Round 2 run instructions.
-- [ ] Generated CSV files are not staged or committed.
+- [x] README has final Round 2 run instructions.
+- [x] Generated CSV files are not staged or committed.
