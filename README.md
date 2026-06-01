@@ -1,104 +1,38 @@
-# DataStorm 7.0 - Team Jarvis
+# DataStorm 7.0 Prototype Round - Team Jarvis
 
-## Project Overview
+Team Jarvis built an end-to-end outlet decision engine for DataStorm 7.0 Round 2 / Prototype Round. The solution estimates January 2026 latent maximum monthly outlet purchase potential, allocates a fixed Western Province promotional budget, and provides a Streamlit Outlet Intelligence app for business review and explainability.
 
-This project estimates latent maximum monthly purchase potential in liters for retail outlets for January 2026.
-
-Core idea:
+Core framing:
 
 ```text
-Observed Sales = min(True Demand Potential, Constraints)
+Observed Sales = min(True Demand Potential, Operational Constraints)
 ```
 
-Therefore, the goal is to estimate hidden true demand potential, not simply historical sales.
+Historical sales are treated as censored observations. The goal is not to predict average historical sales, but to estimate hidden outlet potential under fewer operational constraints.
 
-## Team Roles
+## Round 2 Deliverables
 
-| Member | Role | Main Ownership |
-|---|---|---|
-| Member 1 | Data Architect | Bronze/Silver pipeline, data quality checks, rejected records |
-| Member 2 | Geospatial & Features Lead | POI data, feature engineering, Gold dataset |
-| Member 3 | Lead Data Scientist | Latent potential methodology, modeling, final predictions |
+| Deliverable | Path / Command |
+|---|---|
+| Potential prediction CSV | `submissions/jarvis_predictions.csv` |
+| Budget allocation CSV | `submissions/jarvis_budget_allocations.csv` |
+| Outlet Intelligence app | `streamlit run app/streamlit_app.py` |
+| Technical paper / pitch deck artifacts | `reports/round2/` and final exported files |
+| Reproducible codebase | `src/` pipeline, features, modeling, optimization, XAI, and app code |
 
-## Repository Structure
+Prediction CSV columns:
 
-- `data/`: Local data layers for raw, Bronze, Silver, Gold, external, and rejected records.
-- `notebooks/`: Starter notebooks for forensics, POI features, modeling, and final validation.
-- `src/`: Python packages for reusable data, quality, POI, feature, model, and pipeline code.
-- `reports/`: EDA notes, final report assets, GenAI usage log, and decision log.
-- `submissions/`: Final competition submission files.
+- `Outlet_ID`
+- `Maximum_Monthly_Liters`
 
-## Setup Instructions
+Budget allocation CSV columns:
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
+- `Outlet_ID`
+- `Trade_Spend_Allocation_LKR`
 
-Download dataset files from Kaggle and place them inside `data/raw/`. Raw data files are not committed to GitHub.
+## Final Round 2 Pipeline
 
-## Pipeline Plan
-
-```text
-Raw data
--> Bronze
--> Silver
--> Gold
--> Modeling
--> Final submission CSV
-```
-
-Run the final reproducible pipeline from the repository root:
-
-```bash
-python -m src.data.silver_pipeline
-python -m src.poi.scrape_poi_features
-python -m src.features.build_master_features
-python -m src.pipeline.make_submission
-python -m src.pipeline.validate_submission
-```
-
-The Silver command expects the Kaggle CSV files in `data/raw/` and writes cleaned Silver tables, rejected-record audit files, and report summaries. Key handoff outputs are:
-
-- `data/silver/monthly_outlet_volume.csv`
-- `data/silver/clean_outlet_locations.csv`
-- `data/silver/outlet_base_features.csv`
-- `reports/eda/rejection_summary_by_dataset.csv`
-- `reports/eda/rejection_summary_by_reason.csv`
-- `reports/eda/warning_summary.csv`
-- `reports/eda/correction_summary.csv`
-
-## Member 3 Modeling Pipeline
-
-Generate the final Team Jarvis submission:
-
-```bash
-python -m src.pipeline.make_submission
-```
-
-Validate the submission file:
-
-```bash
-python -m src.pipeline.validate_submission
-```
-
-The modeling pipeline uses `data/gold/master_features.csv` when available and falls back to the Silver-only baseline if the Gold table is missing.
-
-## Round 2 / Prototype Round Extension
-
-This repository continues from the DataStorm 7.0 preliminary round. The existing Round 1 Bronze -> Silver -> Gold pipeline remains the foundation for Round 2 work.
-
-Round 2 adds:
-
-- Distance-decay spatial features
-- Competitor density and market saturation features
-- Western Province LKR 5 million spend optimization
-- XAI explanations
-- Outlet Intelligence Web App
-- Round 2 prediction and budget allocation outputs
-
-Final Round 2 commands:
+Run from the repository root:
 
 ```bash
 python -m src.data.silver_pipeline
@@ -111,22 +45,86 @@ python -m src.pipeline.validate_round2_submission
 streamlit run app/streamlit_app.py
 ```
 
-Round 2 outputs:
+Pipeline flow:
 
-- `submissions/jarvis_predictions.csv`
-- `submissions/jarvis_budget_allocations.csv`
+```text
+Raw Kaggle files
+-> Bronze raw preservation
+-> Silver cleaned and audited data
+-> External POI features
+-> Spatial distance-decay and competitor-density features
+-> Gold master feature table
+-> Latent potential prediction
+-> Western Province budget optimization
+-> Streamlit app and XAI explanations
+```
 
-The prediction output contains exactly:
+## Validation Snapshot
 
-- `Outlet_ID`
-- `Maximum_Monthly_Liters`
+Latest local validation evidence:
 
-The budget allocation output contains exactly:
+| Check | Result |
+|---|---:|
+| Prediction rows | 20,000 |
+| Missing predictions | 0 |
+| Duplicate `Outlet_ID`s | 0 |
+| Median prediction | 111.9846 L |
+| Mean prediction | 302.9689 L |
+| Max prediction | 1857.8529 L |
+| Western outlets considered | 9,000 |
+| Funded Western Province outlets | 300 |
+| Total budget allocated | LKR 5,000,000 |
+| Remaining budget | LKR 0 |
+| Streamlit app local startup | Passed |
 
-- `Outlet_ID`
-- `Trade_Spend_Allocation_LKR`
+## Team Roles
 
-The app can run without an API key using deterministic XAI fallback explanations from structured outlet facts. An optional LLM/API explanation layer can be added later, but generated explanations must use only provided facts and must not change predictions or budget allocations.
+| Member | Role | Main Ownership |
+|---|---|---|
+| Jalina Hirushan | Data Architect | Bronze/Silver pipeline, data quality checks, rejected records |
+| Judith Fernando | Geospatial & Features Lead | POI data, spatial features, Gold dataset |
+| Vishwa Jayasankha | Team Leader / Lead Data Scientist | Latent potential methodology, modeling, optimization, XAI, final outputs |
+
+## Repository Structure
+
+- `data/`: Local raw, Bronze, Silver, Gold, external, and rejected data layers.
+- `src/data/`: Bronze/Silver data engineering pipeline.
+- `src/poi/`: POI scraping and external geospatial feature generation.
+- `src/spatial/`: Competitor-density and spatial signal modules.
+- `src/features/`: Gold feature table builders.
+- `src/models/`: Explainable latent-potential modeling components.
+- `src/optimization/`: Western Province trade-spend allocation.
+- `src/pipeline/`: Submission generation and validation orchestration.
+- `src/xai/`: Deterministic and optional LLM explanation helpers.
+- `app/`: Streamlit Outlet Intelligence app.
+- `reports/`: EDA, validation, decision logs, GenAI logs, and final reporting artifacts.
+- `submissions/`: Generated competition submission outputs, ignored by Git.
+
+## Setup
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Download the competition dataset files from Kaggle and place them in:
+
+```text
+data/raw/
+```
+
+Raw data files are not committed to GitHub.
+
+## App and XAI
+
+Run the Outlet Intelligence app:
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+The app works without an API key by using deterministic XAI fallback explanations from structured outlet facts.
 
 Optional LLM explanations can be enabled locally with Streamlit secrets or environment variables:
 
@@ -135,34 +133,34 @@ USE_LLM_EXPLANATIONS=true
 GEMINI_API_KEY=your_local_key_here
 ```
 
-Do not commit API keys or local secrets.
+LLM explanations must use only provided facts and must not invent numbers, change predictions, or change budget allocations. Do not commit API keys or local secrets.
 
-Raw files, generated intermediate datasets, and submission CSV outputs should not be committed.
+## Preliminary Round Foundation
 
-### Round 2 Validation Snapshot
+Round 2 builds on the preliminary-round Bronze -> Silver -> Gold foundation. The original prediction-only pipeline remains useful as a baseline and fallback:
 
-Latest local validation evidence:
+```bash
+python -m src.pipeline.make_submission
+python -m src.pipeline.validate_submission
+```
 
-- Prediction rows: 20,000
-- Missing predictions: 0
-- Duplicate `Outlet_ID`s: 0
-- Median prediction: 111.9846 liters
-- Mean prediction: 302.9689 liters
-- Max prediction: 1857.8529 liters
-- Western outlets considered for budget allocation: 9,000
-- Funded Western Province outlets: 300
-- Total budget allocated: LKR 5,000,000
-- Remaining budget: LKR 0
-- Streamlit app local startup: passed
+The Silver pipeline writes cleaned datasets, rejected-record audit files, and report summaries. Key handoff outputs include:
 
-## Final Deliverables
+- `data/silver/monthly_outlet_volume.csv`
+- `data/silver/clean_outlet_locations.csv`
+- `data/silver/outlet_base_features.csv`
+- `reports/eda/rejection_summary_by_dataset.csv`
+- `reports/eda/rejection_summary_by_reason.csv`
+- `reports/eda/warning_summary.csv`
+- `reports/eda/correction_summary.csv`
 
-- `submissions/jarvis_predictions.csv`
-- `submissions/jarvis_budget_allocations.csv`
-- Reproducible Bronze -> Silver -> Gold -> Modeling -> Optimization codebase
-- Outlet Intelligence Streamlit Web App
-- Round 2 technical paper and pitch deck artifacts
+## Data Policy
 
-## Notes
+Do not commit:
 
-Raw data files, generated intermediate datasets, API keys, local secrets, and generated submission CSV files are not committed to GitHub.
+- raw Kaggle data
+- generated Bronze/Silver/Gold/external/rejected CSV files
+- generated submission CSV files
+- API keys, `.env` files, Streamlit secrets, or Kaggle credentials
+- virtual environments, caches, or large generated artifacts
+
