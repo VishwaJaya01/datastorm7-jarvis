@@ -345,11 +345,54 @@ def show_table(data: pd.DataFrame, preferred_columns: list[str]) -> None:
 def show_fact_table(facts: dict[str, Any], columns: list[str]) -> None:
     """Show selected facts for one outlet."""
 
-    rows = [{"Fact": column, "Value": facts.get(column)} for column in columns if column in facts]
+    rows = [
+        {"Fact": column, "Value": format_display_value(facts.get(column))}
+        for column in columns
+        if column in facts
+    ]
     if not rows:
         st.write("No facts available.")
         return
-    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    st.dataframe(make_display_table(rows), width="stretch", hide_index=True)
+
+
+def make_display_table(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    """Build an Arrow-safe small display table.
+
+    Streamlit serializes dataframes through Arrow. Small label/value tables can
+    otherwise fail when a single display column mixes strings, floats, ints,
+    booleans, and missing values.
+    """
+
+    display = pd.DataFrame(rows)
+    for column in ["Metric", "Value", "Feature", "Field"]:
+        if column in display.columns:
+            display[column] = display[column].map(format_display_value).astype("string")
+    return display
+
+
+def format_display_value(value: Any) -> str:
+    """Format small display-table values as strings for Arrow compatibility."""
+
+    if value is None:
+        return "Not available"
+    try:
+        if pd.isna(value):
+            return "Not available"
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{float(value):,.2f}"
+
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return "Not available"
+    if text.lower() in {"true", "false"}:
+        return "Yes" if text.lower() == "true" else "No"
+    return text
 
 
 def distribution_table(values: pd.Series, label: str) -> pd.DataFrame:
